@@ -26,7 +26,7 @@ function createPool() {
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// Initialize database with retry
+// Initialize database with retry and browser_id column
 async function initDB(retries = 5) {
   for (let i = 0; i < retries; i++) {
     try {
@@ -37,8 +37,10 @@ async function initDB(retries = 5) {
           id TEXT PRIMARY KEY,
           params JSONB NOT NULL,
           timestamp BIGINT NOT NULL,
+          browser_id TEXT NOT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+        CREATE INDEX IF NOT EXISTS idx_browser_id ON patterns(browser_id);
         CREATE INDEX IF NOT EXISTS idx_timestamp ON patterns(timestamp DESC);
       `);
       client.release();
@@ -61,11 +63,16 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: Date.now() });
 });
 
-// Get all patterns
+// Get patterns for a specific browser
 app.get('/api/patterns', async (req, res) => {
   try {
+    const { browser_id } = req.query;
+    if (!browser_id) {
+      return res.status(400).json({ error: 'browser_id required' });
+    }
     const result = await pool.query(
-      'SELECT id, params, timestamp FROM patterns ORDER BY timestamp DESC'
+      'SELECT id, params, timestamp FROM patterns WHERE browser_id = $1 ORDER BY timestamp DESC',
+      [browser_id]
     );
     res.json(result.rows);
   } catch (err) {
@@ -74,19 +81,19 @@ app.get('/api/patterns', async (req, res) => {
   }
 });
 
-// Save pattern
+// Save pattern with browser_id
 app.post('/api/patterns', async (req, res) => {
-  const { params, timestamp } = req.body;
+  const { params, timestamp, browser_id } = req.body;
   
-  if (!params || !timestamp) {
-    return res.status(400).json({ error: 'Missing params or timestamp' });
+  if (!params || !timestamp || !browser_id) {
+    return res.status(400).json({ error: 'Missing params, timestamp, or browser_id' });
   }
   
   try {
     const id = uuidv4();
     await pool.query(
-      'INSERT INTO patterns (id, params, timestamp) VALUES ($1, $2, $3)',
-      [id, JSON.stringify(params), timestamp]
+      'INSERT INTO patterns (id, params, timestamp, browser_id) VALUES ($1, $2, $3, $4)',
+      [id, JSON.stringify(params), timestamp, browser_id]
     );
     res.json({ id, params, timestamp });
   } catch (err) {
@@ -95,12 +102,19 @@ app.post('/api/patterns', async (req, res) => {
   }
 });
 
-// Delete pattern
+// Delete pattern (verify ownership)
 app.delete('/api/patterns/:id', async (req, res) => {
   try {
-    const result = await pool.query('DELETE FROM patterns WHERE id = $1', [req.params.id]);
+    const { browser_id } = req.query;
+    if (!browser_id) {
+      return res.status(400).json({ error: 'browser_id required' });
+    }
+    const result = await pool.query(
+      'DELETE FROM patterns WHERE id = $1 AND browser_id = $2',
+      [req.params.id, browser_id]
+    );
     if (result.rowCount === 0) {
-      return res.status(404).json({ error: 'Pattern not found' });
+      return res.status(404).json({ error: 'Pattern not found or not owned by you' });
     }
     res.json({ success: true });
   } catch (err) {
@@ -109,10 +123,14 @@ app.delete('/api/patterns/:id', async (req, res) => {
   }
 });
 
-// Clear all patterns
+// Clear all patterns for this browser
 app.delete('/api/patterns', async (req, res) => {
   try {
-    await pool.query('DELETE FROM patterns');
+    const { browser_id } = req.query;
+    if (!browser_id) {
+      return res.status(400).json({ error: 'browser_id required' });
+    }
+    await pool.query('DELETE FROM patterns WHERE browser_id = $1', [browser_id]);
     res.json({ success: true });
   } catch (err) {
     console.error('Error clearing patterns:', err);
