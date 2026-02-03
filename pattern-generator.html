@@ -206,12 +206,27 @@
         .pattern-item button {
             padding: 4px 8px;
             font-size: 10px;
+            margin-left: 2px;
+        }
+        
+        .pattern-item button:first-of-type {
+            margin-left: 0;
         }
 
         .status {
             font-size: 11px;
             color: #666666;
             margin-left: auto;
+        }
+
+        #version {
+            position: fixed;
+            bottom: 8px;
+            left: 8px;
+            font-size: 10px;
+            color: #999;
+            font-family: Helvetica, Arial, sans-serif;
+            z-index: 1000;
         }
     </style>
 </head>
@@ -1575,13 +1590,10 @@
                 item.className = 'pattern-item';
                 item.innerHTML = `
                     <span>${label} — ${date.toLocaleDateString()} ${date.toLocaleTimeString()}</span>
+                    <button onclick="loadPattern('${key}')">Load</button>
+                    <button onclick="renamePattern('${key}')">Rename</button>
                     <button onclick="deletePattern('${key}')">Delete</button>
                 `;
-                item.onclick = (e) => {
-                    if (e.target.tagName !== 'BUTTON') {
-                        loadPattern(key);
-                    }
-                };
                 container.appendChild(item);
             });
         }
@@ -1614,23 +1626,18 @@
             }
         }
 
-
-        function renamePattern(key) {
-            const v = patternStore.get(key);
-            if (!v) return;
-            try {
-                const data = JSON.parse(v);
-                const currentTitle = data.params?.title || 'Untitled';
-                const newTitle = prompt('Rename pattern:', currentTitle);
-                if (newTitle !== null && newTitle !== currentTitle) {
-                    data.params.title = newTitle;
-                    patternStore.set(key, JSON.stringify(data));
-                    showSavedPatterns();
-                }
-            } catch(e) {
-                console.error('Error renaming pattern:', e);
+        async function renamePattern(key) {
+            const data = JSON.parse(patternStore.get(key));
+            const currentTitle = data.params.title || '';
+            const newTitle = prompt('Rename pattern:', currentTitle);
+            if (newTitle !== null && newTitle.trim() !== '') {
+                data.params.title = newTitle.trim();
+                await patternStore.set(key, JSON.stringify(data));
+                loadSavedPatterns();
+                showStatus('Pattern renamed');
             }
         }
+
         async function clearStorage() {
             if (confirm('Clear all saved patterns?')) {
                 await patternStore.clear();
@@ -1719,5 +1726,6 @@
             });
         });
     </script>
+    <div id="version">v1.0</div>
 </body>
 </html>
