@@ -301,7 +301,7 @@
         <div class="toolbar">
             <button onclick="saveToFile()">Export SVG</button>
             <button onclick="loadFromFile()">Import SVG</button>
-            <button onclick="saveToStorage()">Save to Browser</button>
+            <button onclick="saveToStorage()">Save</button>
             <button onclick="clearStorage()">Clear All Saved</button>
             <span class="status" id="status"></span>
             <input type="file" id="fileInput" accept=".svg" style="display: none;">
@@ -355,6 +355,26 @@
             _backend: 'none',   // 'api' | 'persistent' | 'session' | 'memory'
             _apiBase: '/api',   // relative — works whether served by the backend or not
             _apiKey: null,      // set this if your server has API_KEY enabled
+            _browserId: null,   // unique ID for this browser
+            
+            _getBrowserId() {
+                if (this._browserId) return this._browserId;
+                
+                let id = null;
+                try {
+                    id = localStorage.getItem('browser-id');
+                } catch(e) {}
+                
+                if (!id) {
+                    id = 'browser-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+                    try {
+                        localStorage.setItem('browser-id', id);
+                    } catch(e) {}
+                }
+                
+                this._browserId = id;
+                return id;
+            },
 
             // ── local-storage helpers (unchanged from standalone) ──────────
             _test(storage) {
@@ -412,7 +432,7 @@
                     if (res.ok) {
                         this._backend = 'api';
                         // pull existing patterns from the server into _data
-                        const rows = await this._fetch('GET', '/patterns');
+                        const rows = await this._fetch('GET', '/patterns?browser_id=' + encodeURIComponent(this._getBrowserId()));
                         rows.forEach(r => {
                             const key = `pattern-${r.id}`;
                             this._data[key] = JSON.stringify({ id: r.id, params: r.params, timestamp: r.timestamp });
@@ -434,7 +454,7 @@
                 if (this._backend === 'api') {
                     try {
                         const data = JSON.parse(value);
-                        const res = await this._fetch('POST', '/patterns', { params: data.params, timestamp: data.timestamp });
+                        const res = await this._fetch('POST', '/patterns', { params: data.params, timestamp: data.timestamp, browser_id: this._getBrowserId() });
                         // server assigned a UUID — re-key locally so delete works
                         const newKey = `pattern-${res.id}`;
                         if (newKey !== key) {
@@ -461,7 +481,7 @@
                     try {
                         // key is "pattern-<uuid>" — extract the uuid
                         const id = key.replace('pattern-', '');
-                        await this._fetch('DELETE', `/patterns/${id}`);
+                        await this._fetch('DELETE', `/patterns/${id}?browser_id=` + encodeURIComponent(this._getBrowserId()));
                     } catch(e) { console.warn('API delete failed:', e.message); }
                 }
             },
@@ -473,7 +493,7 @@
                     this.keys().forEach(k => { try { this._storage.removeItem(k); } catch(e) {} });
                 }
                 if (this._backend === 'api') {
-                    try { await this._fetch('DELETE', '/patterns'); } catch(e) { console.warn('API clear failed:', e.message); }
+                    try { await this._fetch('DELETE', '/patterns?browser_id=' + encodeURIComponent(this._getBrowserId())); } catch(e) { console.warn('API clear failed:', e.message); }
                 }
             },
 

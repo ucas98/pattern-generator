@@ -8,32 +8,51 @@ const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Postgres connection
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
-});
+// Postgres connection with retry logic
+let pool;
+
+function createPool() {
+  return new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('railway.app') 
+      ? { rejectUnauthorized: false } 
+      : false,
+    connectionTimeoutMillis: 5000,
+    idleTimeoutMillis: 30000
+  });
+}
 
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// Initialize database
-async function initDB() {
-  const client = await pool.connect();
-  try {
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS patterns (
-        id TEXT PRIMARY KEY,
-        params JSONB NOT NULL,
-        timestamp BIGINT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-      CREATE INDEX IF NOT EXISTS idx_timestamp ON patterns(timestamp DESC);
-    `);
-    console.log('Database initialized');
-  } finally {
-    client.release();
+// Initialize database with retry
+async function initDB(retries = 5) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      pool = createPool();
+      const client = await pool.connect();
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS patterns (
+          id TEXT PRIMARY KEY,
+          params JSONB NOT NULL,
+          timestamp BIGINT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_timestamp ON patterns(timestamp DESC);
+      `);
+      client.release();
+      console.log('Database initialized successfully');
+      return;
+    } catch (err) {
+      console.log(`Database connection attempt ${i + 1} failed:`, err.message);
+      if (i < retries - 1) {
+        console.log(`Retrying in ${(i + 1) * 2} seconds...`);
+        await new Promise(resolve => setTimeout(resolve, (i + 1) * 2000));
+      } else {
+        throw err;
+      }
+    }
   }
 }
 
@@ -111,12 +130,13 @@ app.get('/', (req, res) => {
   }
 });
 
-// Start server
-initDB().then(() => {
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+// Start server first, then initialize DB
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  
+  // Initialize DB after server is listening
+  initDB().catch(err => {
+    console.error('Failed to initialize database after retries:', err);
+    console.log('Server will continue running, but database features will be unavailable');
   });
-}).catch(err => {
-  console.error('Failed to initialize database:', err);
-  process.exit(1);
 });
