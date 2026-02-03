@@ -1,0 +1,1686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SVG Pattern Generator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Helvetica, Arial, sans-serif;
+            background: #ffffff;
+            color: #000000;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            width: 300px;
+            background: #f5f5f5;
+            padding: 20px;
+            overflow-y: auto;
+            border-right: 1px solid #d0d0d0;
+        }
+
+        .canvas-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #ffffff;
+        }
+
+        .toolbar {
+            background: #f5f5f5;
+            padding: 15px 20px;
+            border-bottom: 1px solid #d0d0d0;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .canvas-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            overflow: auto;
+            position: relative;
+            cursor: grab;
+        }
+
+        .canvas-container.dragging {
+            cursor: grabbing;
+        }
+
+        #canvas {
+            background: white;
+            border: 1px solid #d0d0d0;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            transform-origin: center center;
+            transition: transform 0.2s ease;
+            pointer-events: none;
+        }
+
+        .zoom-controls {
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            background: #f5f5f5;
+            padding: 10px;
+            border: 1px solid #d0d0d0;
+            border-radius: 4px;
+        }
+
+        .zoom-controls button {
+            width: 40px;
+            height: 40px;
+            padding: 0;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .zoom-level {
+            text-align: center;
+            font-size: 11px;
+            color: #666666;
+            padding: 5px 0;
+        }
+
+        h2 {
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+            color: #000000;
+        }
+
+        .control-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-size: 12px;
+            margin-bottom: 5px;
+            color: #333333;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            margin-bottom: 5px;
+        }
+
+        input[type="number"] {
+            width: 100%;
+            padding: 6px;
+            background: #ffffff;
+            border: 1px solid #d0d0d0;
+            color: #000000;
+            font-family: Helvetica, Arial, sans-serif;
+            font-size: 12px;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 6px;
+            background: #ffffff;
+            border: 1px solid #d0d0d0;
+            color: #000000;
+            font-family: Helvetica, Arial, sans-serif;
+            font-size: 12px;
+            box-sizing: border-box;
+        }
+
+        select {
+            width: 100%;
+            padding: 6px;
+            background: #ffffff;
+            border: 1px solid #d0d0d0;
+            color: #000000;
+            font-family: Helvetica, Arial, sans-serif;
+            font-size: 12px;
+        }
+
+        button {
+            padding: 8px 16px;
+            background: #e0e0e0;
+            border: 1px solid #c0c0c0;
+            border-radius: 6px;
+            color: #000000;
+            cursor: pointer;
+            font-family: Helvetica, Arial, sans-serif;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background: #d0d0d0;
+            border-color: #a0a0a0;
+        }
+
+        button:active {
+            background: #c0c0c0;
+        }
+
+        .value-display {
+            font-size: 11px;
+            color: #666666;
+            text-align: right;
+        }
+
+        .saved-patterns {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #d0d0d0;
+        }
+
+        .pattern-item {
+            padding: 8px;
+            background: #ffffff;
+            margin-bottom: 8px;
+            cursor: pointer;
+            border: 1px solid #d0d0d0;
+            font-size: 11px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .pattern-item:hover {
+            background: #f5f5f5;
+            border-color: #b0b0b0;
+        }
+
+        .pattern-item button {
+            padding: 4px 8px;
+            font-size: 10px;
+        }
+
+        .status {
+            font-size: 11px;
+            color: #666666;
+            margin-left: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>Pattern Controls</h2>
+        
+        <div class="control-group">
+            <label>Pattern Type</label>
+            <select id="patternType">
+                <option value="grid">Grid</option>
+                <option value="radial">Radial</option>
+                <option value="spiral">Spiral</option>
+                <option value="singlespiral">Single Spiral</option>
+                <option value="wave">Wave</option>
+                <option value="truchet">Truchet Tiles</option>
+                <option value="noise">Noise Lines</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label>Density</label>
+            <input type="range" id="density" min="5" max="100" value="20">
+            <div class="value-display" id="densityValue">20</div>
+        </div>
+
+        <div class="control-group">
+            <label>Number of Objects</label>
+            <input type="range" id="numObjects" min="1" max="20" value="1">
+            <div class="value-display" id="numObjectsValue">1</div>
+        </div>
+
+        <div class="control-group">
+            <label>Scale</label>
+            <input type="range" id="scale" min="1" max="50" value="10">
+            <div class="value-display" id="scaleValue">10</div>
+        </div>
+
+        <div class="control-group">
+            <label>Rotation</label>
+            <input type="range" id="rotation" min="0" max="360" value="0">
+            <div class="value-display" id="rotationValue">0°</div>
+        </div>
+
+        <div class="control-group">
+            <label>Center X (%)</label>
+            <input type="range" id="centerX" min="0" max="100" value="50">
+            <div class="value-display" id="centerXValue">50%</div>
+        </div>
+
+        <div class="control-group">
+            <label>Center Y (%)</label>
+            <input type="range" id="centerY" min="0" max="100" value="50">
+            <div class="value-display" id="centerYValue">50%</div>
+        </div>
+
+        <div class="control-group">
+            <label>Randomness</label>
+            <input type="range" id="randomness" min="0" max="100" value="0">
+            <div class="value-display" id="randomnessValue">0</div>
+        </div>
+
+        <div class="control-group">
+            <label>Title</label>
+            <input type="text" id="titleInput" value="" placeholder="e.g. Noise Lines" oninput="generate()">
+        </div>
+
+        <div class="control-group" style="border-top: 1px solid #d0d0d0; padding-top: 15px; margin-top: 5px;">
+            <label>Layers</label>
+            <input type="number" id="layers" min="1" max="20" value="1">
+        </div>
+
+        <div class="control-group">
+            <label>Seed</label>
+            <input type="number" id="seed" value="12345">
+        </div>
+
+        <button onclick="randomize()" style="width: 100%;">Randomize</button>
+
+        <div class="saved-patterns">
+            <h2>Saved Patterns</h2>
+            <div id="savedPatternsList"></div>
+        </div>
+    </div>
+
+    <div class="canvas-area">
+        <div class="toolbar">
+            <button onclick="saveToFile()">Export SVG</button>
+            <button onclick="loadFromFile()">Import SVG</button>
+            <button onclick="saveToStorage()">Save to Browser</button>
+            <button onclick="clearStorage()">Clear All Saved</button>
+            <span class="status" id="status"></span>
+            <input type="file" id="fileInput" accept=".svg" style="display: none;">
+        </div>
+        
+        <div class="canvas-container">
+            <svg id="canvas" width="794" height="1123" xmlns="http://www.w3.org/2000/svg" style="shape-rendering: crispEdges;"></svg>
+            <div class="zoom-controls">
+                <button onclick="zoomIn()" title="Zoom In">+</button>
+                <div class="zoom-level" id="zoomLevel">100%</div>
+                <button onclick="zoomOut()" title="Zoom Out">−</button>
+                <button onclick="resetZoom()" title="Reset Zoom">⊙</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Seeded random number generator
+        class Random {
+            constructor(seed) {
+                this.seed = seed;
+            }
+            
+            next() {
+                this.seed = (this.seed * 9301 + 49297) % 233280;
+                return this.seed / 233280;
+            }
+        }
+
+        let currentPattern = null;
+        let zoomLevel = 1;
+        const minZoom = 0.1;
+        const maxZoom = 5;
+        const zoomStep = 0.2;
+        
+        let isPanning = false;
+        let startX = 0;
+        let startY = 0;
+        let scrollLeft = 0;
+        let scrollTop = 0;
+
+        // ─── Pattern Store ───────────────────────────────────────────────
+        // Tries to use the API backend if one is reachable (same origin /api/health).
+        // If not — or if any API call fails — falls back to localStorage /
+        // sessionStorage / in-memory, exactly as the standalone version does.
+        // The rest of the app just calls patternStore.set/get/remove/keys —
+        // it never needs to know which backend is active.
+        const patternStore = {
+            _data: {},
+            _storage: null,
+            _backend: 'none',   // 'api' | 'persistent' | 'session' | 'memory'
+            _apiBase: '/api',   // relative — works whether served by the backend or not
+            _apiKey: null,      // set this if your server has API_KEY enabled
+
+            // ── local-storage helpers (unchanged from standalone) ──────────
+            _test(storage) {
+                try {
+                    const k = '__ps_test__';
+                    storage.setItem(k, '1');
+                    storage.removeItem(k);
+                    return true;
+                } catch(e) { return false; }
+            },
+            _initLocal() {
+                if (this._test(localStorage)) {
+                    this._storage = localStorage;
+                    this._backend = 'persistent';
+                } else if (this._test(sessionStorage)) {
+                    this._storage = sessionStorage;
+                    this._backend = 'session';
+                } else {
+                    this._storage = null;
+                    this._backend = 'memory';
+                }
+                // hydrate in-memory cache
+                if (this._storage) {
+                    for (let i = 0; i < this._storage.length; i++) {
+                        const k = this._storage.key(i);
+                        if (k && k.startsWith('pattern-')) {
+                            this._data[k] = this._storage.getItem(k);
+                        }
+                    }
+                }
+            },
+
+            // ── API helpers ───────────────────────────────────────────────
+            _headers() {
+                const h = { 'Content-Type': 'application/json' };
+                if (this._apiKey) h['Authorization'] = `Bearer ${this._apiKey}`;
+                return h;
+            },
+            async _fetch(method, path, body) {
+                const opts = { method, headers: this._headers() };
+                if (body) opts.body = JSON.stringify(body);
+                const res = await fetch(this._apiBase + path, opts);
+                if (!res.ok) throw new Error(`API ${res.status}`);
+                return res.json();
+            },
+
+            // ── main init — probe API, fall back to local ─────────────────
+            async init() {
+                try {
+                    // 2-second timeout — if the server isn't there we don't want to hang
+                    const controller = new AbortController();
+                    const timeout = setTimeout(() => controller.abort(), 2000);
+                    const res = await fetch(this._apiBase + '/health', { signal: controller.signal });
+                    clearTimeout(timeout);
+                    if (res.ok) {
+                        this._backend = 'api';
+                        // pull existing patterns from the server into _data
+                        const rows = await this._fetch('GET', '/patterns');
+                        rows.forEach(r => {
+                            const key = `pattern-${r.id}`;
+                            this._data[key] = JSON.stringify({ id: r.id, params: r.params, timestamp: r.timestamp });
+                        });
+                        return;
+                    }
+                } catch(e) { /* server not reachable — fall through */ }
+
+                // No API available — use local storage as before
+                this._initLocal();
+            },
+
+            // ── write ─────────────────────────────────────────────────────
+            async set(key, value) {
+                // always mirror locally so the UI updates instantly
+                this._data[key] = value;
+                if (this._storage) { try { this._storage.setItem(key, value); } catch(e) {} }
+
+                if (this._backend === 'api') {
+                    try {
+                        const data = JSON.parse(value);
+                        const res = await this._fetch('POST', '/patterns', { params: data.params, timestamp: data.timestamp });
+                        // server assigned a UUID — re-key locally so delete works
+                        const newKey = `pattern-${res.id}`;
+                        if (newKey !== key) {
+                            this._data[newKey] = JSON.stringify({ id: res.id, params: res.params, timestamp: res.timestamp });
+                            delete this._data[key];
+                            if (this._storage) { try { this._storage.removeItem(key); } catch(e) {} }
+                        }
+                    } catch(e) {
+                        // API write failed but local copy is already saved — graceful degradation
+                        console.warn('API save failed, kept locally:', e.message);
+                    }
+                }
+            },
+
+            // ── read ───────────────────────────────────────────────────────
+            get(key) { return this._data[key] || null; },
+
+            // ── delete ────────────────────────────────────────────────────
+            async remove(key) {
+                delete this._data[key];
+                if (this._storage) { try { this._storage.removeItem(key); } catch(e) {} }
+
+                if (this._backend === 'api') {
+                    try {
+                        // key is "pattern-<uuid>" — extract the uuid
+                        const id = key.replace('pattern-', '');
+                        await this._fetch('DELETE', `/patterns/${id}`);
+                    } catch(e) { console.warn('API delete failed:', e.message); }
+                }
+            },
+
+            // ── clear all ─────────────────────────────────────────────────
+            async clear() {
+                this._data = {};
+                if (this._storage) {
+                    this.keys().forEach(k => { try { this._storage.removeItem(k); } catch(e) {} });
+                }
+                if (this._backend === 'api') {
+                    try { await this._fetch('DELETE', '/patterns'); } catch(e) { console.warn('API clear failed:', e.message); }
+                }
+            },
+
+            // ── list keys ─────────────────────────────────────────────────
+            keys() { return Object.keys(this._data).filter(k => k.startsWith('pattern-')); }
+        };
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            await patternStore.init();
+            loadSavedPatterns();
+            generate();
+            
+            // Auto-save to localStorage on parameter change
+            ['patternType', 'density', 'numObjects', 'scale', 'rotation', 'centerX', 'centerY', 'randomness', 'seed', 'layers'].forEach(id => {
+                const element = document.getElementById(id);
+                element.addEventListener('change', generate);
+                if (element.type === 'range') {
+                    element.addEventListener('input', updateValueDisplay);
+                }
+            });
+
+            document.getElementById('fileInput').addEventListener('change', handleFileLoad);
+        });
+
+        function updateValueDisplay(e) {
+            const id = e.target.id;
+            const value = e.target.value;
+            const display = document.getElementById(id + 'Value');
+            if (display) {
+                if (id === 'rotation') {
+                    display.textContent = value + '°';
+                } else if (id === 'centerX' || id === 'centerY') {
+                    display.textContent = value + '%';
+                } else {
+                    display.textContent = value;
+                }
+            }
+        }
+
+        function getParams() {
+            return {
+                type: document.getElementById('patternType').value,
+                density: parseInt(document.getElementById('density').value),
+                numObjects: parseInt(document.getElementById('numObjects').value),
+                scale: parseInt(document.getElementById('scale').value),
+                rotation: parseInt(document.getElementById('rotation').value),
+                centerX: parseInt(document.getElementById('centerX').value),
+                centerY: parseInt(document.getElementById('centerY').value),
+                randomness: parseInt(document.getElementById('randomness').value),
+                seed: parseInt(document.getElementById('seed').value),
+                layers: parseInt(document.getElementById('layers').value),
+                title: document.getElementById('titleInput').value
+            };
+        }
+
+        function generate() {
+            const params = getParams();
+            const canvas = document.getElementById('canvas');
+            const width = 794;  // A4 width in pixels at 96dpi
+            const height = 1123; // A4 height in pixels at 96dpi
+            
+            // Exact layout from design (pixel-measured and scaled to A4)
+            const outerX = 21;
+            const outerY = 21;
+            const outerW = 750;
+            const outerH = 1079;
+            
+            // The inner edge of the triple border (black/white/black = 3px each side)
+            const innerX = outerX + 3;
+            const innerY = outerY + 3;
+            const innerW = outerW - 6;
+            const innerH = outerH - 6;
+            const innerBottom = innerY + innerH; // bottom edge of inner border
+            
+            // Flush edges: box borders sit right on the inner border stroke (border3).
+            // border3 stroke is at outerX+2.5, so its outer pixel edge is at outerX+2.
+            const flushLeft   = outerX + 2;
+            const flushTop    = outerY + 2;
+            const flushRight  = outerX + outerW - 2;
+            const flushBottom = outerY + outerH - 2;
+            
+            // Footer box height and top Y are calculated after padding constants below
+            
+            // Pattern clip area: everything inside the inner border
+            const patternX = innerX;
+            const patternY = innerY;
+            const patternW = innerW;
+            const patternH = innerH; // full inner area — pattern runs behind footer boxes
+            
+            // Clear canvas
+            canvas.innerHTML = '';
+            
+            // Add clipPath for the pattern area
+            const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+            const clipPath = document.createElementNS('http://www.w3.org/2000/svg', 'clipPath');
+            clipPath.setAttribute('id', 'patternClip');
+            const clipRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            clipRect.setAttribute('x', patternX);
+            clipRect.setAttribute('y', patternY);
+            clipRect.setAttribute('width', patternW);
+            clipRect.setAttribute('height', patternH);
+            clipPath.appendChild(clipRect);
+            defs.appendChild(clipPath);
+            canvas.appendChild(defs);
+            
+            // Wrapper group that clips the pattern
+            const clipGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            clipGroup.setAttribute('clip-path', 'url(#patternClip)');
+            
+            const rng = new Random(params.seed);
+
+            // Scale and rotation are applied as a transform *after* the generator runs.
+            // The generators need to draw into a larger area so the pattern still fills
+            // the full canvas after the transform shrinks/rotates it.
+            // drawW/drawH = canvas size inflated by 1/scaleFactor, so scale shrinking
+            // brings it back to exactly filling the canvas. The per-generator diagonal
+            // padding on top of that handles rotation coverage.
+            const scaleFactor = params.scale / 10;
+            const drawW = width / scaleFactor;
+            const drawH = height / scaleFactor;
+
+            switch(params.type) {
+                case 'grid':
+                    generateGrid(clipGroup, drawW, drawH, params, rng);
+                    break;
+                case 'radial':
+                    generateRadial(clipGroup, drawW, drawH, params, rng);
+                    break;
+                case 'spiral':
+                    generateSpiral(clipGroup, drawW, drawH, params, rng);
+                    break;
+                case 'singlespiral':
+                    generateSingleSpiral(clipGroup, drawW, drawH, params, rng);
+                    break;
+                case 'wave':
+                    generateWave(clipGroup, drawW, drawH, params, rng);
+                    break;
+                case 'truchet':
+                    generateTruchet(clipGroup, drawW, drawH, params, rng);
+                    break;
+                case 'noise':
+                    generateNoise(clipGroup, drawW, drawH, params, rng);
+                    break;
+            }
+            
+            // --- SPLIT INTO LAYERS ---
+            // The generator appended a single <g> (possibly with a rotation transform)
+            // containing all the pattern paths. We extract those paths and distribute
+            // them round-robin across N layer groups, each with its own clipPath.
+            const numLayers = Math.max(1, Math.min(20, parseInt(document.getElementById('layers').value) || 1));
+            const sourceG = clipGroup.firstElementChild; // the generator's <g>
+            const paths = sourceG ? Array.from(sourceG.children) : [];
+
+            // Create N clipPaths in defs (reuse same rect geometry)
+            for (let i = 0; i < numLayers; i++) {
+                const cp = document.createElementNS('http://www.w3.org/2000/svg', 'clipPath');
+                cp.setAttribute('id', 'layerClip' + i);
+                const cr = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                cr.setAttribute('x', patternX);
+                cr.setAttribute('y', patternY);
+                cr.setAttribute('width', patternW);
+                cr.setAttribute('height', patternH);
+                cp.appendChild(cr);
+                defs.appendChild(cp);
+            }
+
+            // Compose scale and rotation around canvas centre.
+            const cx = width / 2;
+            const cy = height / 2;
+            // translate to origin → scale → rotate → translate back
+            const composedTransform = `translate(${cx},${cy}) rotate(${params.rotation}) scale(${scaleFactor}) translate(${-cx},${-cy})`;
+
+            // Build each layer group and distribute paths
+            for (let i = 0; i < numLayers; i++) {
+                const layer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                layer.setAttribute('id', 'layer' + i);
+                layer.setAttribute('clip-path', 'url(#layerClip' + i + ')');
+                // Inkscape-compatible layer labelling
+                layer.setAttribute('inkscape:groupmode', 'layer');
+                layer.setAttribute('inkscape:label', 'Layer ' + (i + 1));
+
+                // Inner group carries the composed scale + rotation transform
+                const inner = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                inner.setAttribute('transform', composedTransform);
+                // Compensate stroke width so it stays at 1px regardless of scale
+                inner.setAttribute('stroke-width', (1 / scaleFactor).toFixed(4));
+
+                // Round-robin: layer i gets paths i, i+N, i+2N, …
+                for (let j = i; j < paths.length; j += numLayers) {
+                    inner.appendChild(paths[j]);
+                }
+
+                layer.appendChild(inner);
+                canvas.appendChild(layer);
+            }
+            
+            // --- MEASURE TEXT (needs to happen before drawing) ---
+            function measureText(text) {
+                const tmp = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                tmp.setAttribute('font-family', 'Helvetica, Arial, sans-serif');
+                tmp.setAttribute('font-size', '16');
+                tmp.setAttribute('font-weight', 'bold');
+                tmp.textContent = text;
+                canvas.appendChild(tmp);
+                const w = tmp.getBBox().width;
+                canvas.removeChild(tmp);
+                return w;
+            }
+            
+            const titleValue = document.getElementById('titleInput').value;
+            const typeLabels = { grid: 'Grid', radial: 'Radial', spiral: 'Spiral', singlespiral: 'Single Spiral', wave: 'Wave', truchet: 'Truchet Tiles', noise: 'Noise Lines' };
+            const titleDisplay = titleValue || (typeLabels[params.type] || params.type);
+            const titlePadX = 8;
+            const titlePadY = 4;
+            const titlePadBottom = 8;
+            const titleTextW = measureText(titleDisplay);
+            const titleBoxW = titleTextW + titlePadX * 2;
+            
+            const now = new Date();
+            const dd = String(now.getDate()).padStart(2, '0');
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const yyyy = now.getFullYear();
+            const dateDisplay = `${dd}.${mm}.${yyyy}`;
+            const datePadX = 8;
+            const datePadY = 4;
+            const dateTextW = measureText(dateDisplay);
+            const dateBoxW = dateTextW + datePadX * 2;
+            
+            // Footer box height: 16px font + 4px top + 8px bottom padding
+            const footerBoxH = 16 + titlePadY + titlePadBottom;
+            const footerTopY = flushBottom - footerBoxH;
+            
+            // --- FRAME LAYER (title boxes + triple border) ---
+            const frameLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            frameLayer.setAttribute('id', 'frameLayer');
+
+            // --- TITLE BOX (bottom-left) ---
+            // White fill
+            const titleBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            titleBg.setAttribute('x', flushLeft);
+            titleBg.setAttribute('y', footerTopY);
+            titleBg.setAttribute('width', titleBoxW);
+            titleBg.setAttribute('height', flushBottom - footerTopY);
+            titleBg.setAttribute('fill', '#fff');
+            frameLayer.appendChild(titleBg);
+            
+            // Top border (1px filled rect)
+            const titleTop = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            titleTop.setAttribute('x', flushLeft);
+            titleTop.setAttribute('y', footerTopY);
+            titleTop.setAttribute('width', titleBoxW);
+            titleTop.setAttribute('height', '1');
+            titleTop.setAttribute('fill', '#000');
+            frameLayer.appendChild(titleTop);
+            
+            // Right border (1px filled rect)
+            const titleRight = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            titleRight.setAttribute('x', flushLeft + titleBoxW);
+            titleRight.setAttribute('y', footerTopY);
+            titleRight.setAttribute('width', '1');
+            titleRight.setAttribute('height', flushBottom - footerTopY);
+            titleRight.setAttribute('fill', '#000');
+            frameLayer.appendChild(titleRight);
+            
+            // Text
+            const titleText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            titleText.setAttribute('x', flushLeft + titleBoxW / 2);
+            titleText.setAttribute('y', footerTopY + titlePadY + 16); // padY + font size = baseline
+            titleText.setAttribute('font-family', 'Helvetica, Arial, sans-serif');
+            titleText.setAttribute('font-size', '16');
+            titleText.setAttribute('font-weight', 'bold');
+            titleText.setAttribute('text-anchor', 'middle');
+            titleText.setAttribute('fill', '#000');
+            titleText.textContent = titleDisplay;
+            frameLayer.appendChild(titleText);
+            
+            // --- DATE BOX (bottom-right) ---
+            // White fill
+            const dateBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            dateBg.setAttribute('x', flushRight - dateBoxW);
+            dateBg.setAttribute('y', footerTopY);
+            dateBg.setAttribute('width', dateBoxW);
+            dateBg.setAttribute('height', flushBottom - footerTopY);
+            dateBg.setAttribute('fill', '#fff');
+            frameLayer.appendChild(dateBg);
+            
+            // Top border (1px filled rect)
+            const dateTop = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            dateTop.setAttribute('x', flushRight - dateBoxW);
+            dateTop.setAttribute('y', footerTopY);
+            dateTop.setAttribute('width', dateBoxW);
+            dateTop.setAttribute('height', '1');
+            dateTop.setAttribute('fill', '#000');
+            frameLayer.appendChild(dateTop);
+            
+            // Left border (1px filled rect)
+            const dateLeft = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            dateLeft.setAttribute('x', flushRight - dateBoxW);
+            dateLeft.setAttribute('y', footerTopY);
+            dateLeft.setAttribute('width', '1');
+            dateLeft.setAttribute('height', flushBottom - footerTopY);
+            dateLeft.setAttribute('fill', '#000');
+            frameLayer.appendChild(dateLeft);
+            
+            // Text
+            const dateText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            dateText.setAttribute('x', flushRight - dateBoxW / 2);
+            dateText.setAttribute('y', footerTopY + datePadY + 16); // padY + font size = baseline
+            dateText.setAttribute('font-family', 'Helvetica, Arial, sans-serif');
+            dateText.setAttribute('font-size', '16');
+            dateText.setAttribute('font-weight', 'bold');
+            dateText.setAttribute('text-anchor', 'middle');
+            dateText.setAttribute('fill', '#000');
+            dateText.textContent = dateDisplay;
+            frameLayer.appendChild(dateText);
+            
+            // --- TRIPLE BORDER (drawn last so it sits on top) ---
+            // Outer black
+            const border1 = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            border1.setAttribute('x', outerX);
+            border1.setAttribute('y', outerY);
+            border1.setAttribute('width', outerW);
+            border1.setAttribute('height', outerH);
+            border1.setAttribute('fill', 'none');
+            border1.setAttribute('stroke', '#000');
+            border1.setAttribute('stroke-width', '1');
+            frameLayer.appendChild(border1);
+            
+            // White
+            const border2 = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            border2.setAttribute('x', outerX + 1);
+            border2.setAttribute('y', outerY + 1);
+            border2.setAttribute('width', outerW - 2);
+            border2.setAttribute('height', outerH - 2);
+            border2.setAttribute('fill', 'none');
+            border2.setAttribute('stroke', '#fff');
+            border2.setAttribute('stroke-width', '1');
+            frameLayer.appendChild(border2);
+            
+            // Inner black
+            const border3 = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            border3.setAttribute('x', outerX + 2);
+            border3.setAttribute('y', outerY + 2);
+            border3.setAttribute('width', outerW - 4);
+            border3.setAttribute('height', outerH - 4);
+            border3.setAttribute('fill', 'none');
+            border3.setAttribute('stroke', '#000');
+            border3.setAttribute('stroke-width', '1');
+            frameLayer.appendChild(border3);
+
+            canvas.appendChild(frameLayer);
+            
+            // Update value displays
+            ['density', 'numObjects', 'scale', 'rotation', 'centerX', 'centerY', 'randomness'].forEach(id => {
+                const element = document.getElementById(id);
+                const display = document.getElementById(id + 'Value');
+                if (display) {
+                    if (id === 'rotation') {
+                        display.textContent = element.value + '°';
+                    } else if (id === 'centerX' || id === 'centerY') {
+                        display.textContent = element.value + '%';
+                    } else {
+                        display.textContent = element.value;
+                    }
+                }
+            });
+            
+            currentPattern = params;
+            showStatus('Pattern generated');
+        }
+
+        function generateGrid(canvas, width, height, params, rng) {
+            const spacingX = width / params.density;
+            const spacingY = height / params.density;
+            const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            
+            // Draw from -diagonal to +diagonal centred on canvas centre.
+            // This guarantees full coverage at any rotation or scale.
+            const diagonal = Math.sqrt(width * width + height * height);
+            const cx = width / 2;
+            const cy = height / 2;
+            const startX = cx - diagonal;
+            const endX   = cx + diagonal;
+            const startY = cy - diagonal;
+            const endY   = cy + diagonal;
+            
+            const iMin = Math.floor((startY) / spacingY) - 1;
+            const iMax = Math.ceil((endY) / spacingY) + 1;
+            const jMin = Math.floor((startX) / spacingX) - 1;
+            const jMax = Math.ceil((endX) / spacingX) + 1;
+            
+            // Horizontal lines
+            for (let i = iMin; i <= iMax; i++) {
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                let d = '';
+                
+                for (let j = jMin; j <= jMax; j++) {
+                    let x = j * spacingX;
+                    let y = i * spacingY;
+                    
+                    if (params.randomness > 0) {
+                        x += (rng.next() - 0.5) * spacingX * (params.randomness / 100);
+                        y += (rng.next() - 0.5) * spacingY * (params.randomness / 100);
+                    }
+                    
+                    if (j === jMin) {
+                        d += `M ${x} ${y}`;
+                    } else {
+                        d += ` L ${x} ${y}`;
+                    }
+                }
+                
+                path.setAttribute('d', d);
+                path.setAttribute('fill', 'none');
+                path.setAttribute('stroke', 'black');
+                g.appendChild(path);
+            }
+            
+            // Vertical lines
+            for (let j = jMin; j <= jMax; j++) {
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                let d = '';
+                
+                for (let i = iMin; i <= iMax; i++) {
+                    let x = j * spacingX;
+                    let y = i * spacingY;
+                    
+                    if (params.randomness > 0) {
+                        x += (rng.next() - 0.5) * spacingX * (params.randomness / 100);
+                        y += (rng.next() - 0.5) * spacingY * (params.randomness / 100);
+                    }
+                    
+                    if (i === iMin) {
+                        d += `M ${x} ${y}`;
+                    } else {
+                        d += ` L ${x} ${y}`;
+                    }
+                }
+                
+                path.setAttribute('d', d);
+                path.setAttribute('fill', 'none');
+                path.setAttribute('stroke', 'black');
+                g.appendChild(path);
+            }
+            
+            
+            canvas.appendChild(g);
+        }
+
+        function generateRadial(canvas, width, height, params, rng) {
+            const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            const diagonal = Math.sqrt(width * width + height * height);
+            const maxRadius = diagonal; // Use full diagonal to ensure coverage when rotated
+            
+            // Generate multiple radial patterns
+            for (let obj = 0; obj < params.numObjects; obj++) {
+                let cx, cy;
+                
+                if (params.numObjects === 1) {
+                    // Single object uses the center point controls
+                    cx = width * (params.centerX / 100);
+                    cy = height * (params.centerY / 100);
+                } else {
+                    // Multiple objects distributed in a grid pattern
+                    const cols = Math.ceil(Math.sqrt(params.numObjects));
+                    const rows = Math.ceil(params.numObjects / cols);
+                    const col = obj % cols;
+                    const row = Math.floor(obj / cols);
+                    
+                    cx = (width / (cols + 1)) * (col + 1);
+                    cy = (height / (rows + 1)) * (row + 1);
+                    
+                    // Add some randomness to position if randomness is enabled
+                    if (params.randomness > 0) {
+                        cx += (rng.next() - 0.5) * (width / cols) * (params.randomness / 100);
+                        cy += (rng.next() - 0.5) * (height / rows) * (params.randomness / 100);
+                    }
+                }
+                
+                // Concentric circles
+                for (let i = 1; i <= params.density; i++) {
+                    const radius = (i / params.density) * maxRadius;
+                    const points = Math.max(32, Math.floor(params.density * 2));
+                    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    let d = '';
+                    
+                    for (let j = 0; j <= points; j++) {
+                        const angle = (j / points) * Math.PI * 2;
+                        let r = radius;
+                        
+                        if (params.randomness > 0) {
+                            r += (rng.next() - 0.5) * radius * (params.randomness / 100);
+                        }
+                        
+                        const x = cx + Math.cos(angle) * r;
+                        const y = cy + Math.sin(angle) * r;
+                        
+                        if (j === 0) {
+                            d += `M ${x} ${y}`;
+                        } else {
+                            d += ` L ${x} ${y}`;
+                        }
+                    }
+                    
+                    path.setAttribute('d', d);
+                    path.setAttribute('fill', 'none');
+                    path.setAttribute('stroke', 'black');
+                    g.appendChild(path);
+                }
+                
+                // Radial lines
+                const spokes = Math.max(8, Math.floor(params.density * 0.8));
+                for (let j = 0; j < spokes; j++) {
+                    const angle = (j / spokes) * Math.PI * 2;
+                    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    
+                    const x1 = cx;
+                    const y1 = cy;
+                    const x2 = cx + Math.cos(angle) * maxRadius;
+                    const y2 = cy + Math.sin(angle) * maxRadius;
+                    
+                    path.setAttribute('d', `M ${x1} ${y1} L ${x2} ${y2}`);
+                    path.setAttribute('fill', 'none');
+                    path.setAttribute('stroke', 'black');
+                    g.appendChild(path);
+                }
+            }
+            
+            
+            canvas.appendChild(g);
+        }
+
+        function generateSpiral(canvas, width, height, params, rng) {
+            const cx = width / 2;
+            const cy = height / 2;
+            const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            
+            const points = params.density * 20;
+            const diagonal = Math.sqrt(width * width + height * height);
+            const maxRadius = diagonal; // Use full diagonal to ensure coverage when rotated
+            const spirals = Math.max(1, Math.floor(params.density / 10));
+            
+            for (let s = 0; s < spirals; s++) {
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                let d = '';
+                
+                for (let i = 0; i < points; i++) {
+                    const t = i / points;
+                    const angle = t * Math.PI * 2 * (params.density / 3) + (s / spirals) * Math.PI * 2;
+                    let radius = t * maxRadius;
+                    
+                    if (params.randomness > 0) {
+                        radius += (rng.next() - 0.5) * 20 * (params.randomness / 100);
+                    }
+                    
+                    const x = cx + Math.cos(angle) * radius;
+                    const y = cy + Math.sin(angle) * radius;
+                    
+                    if (i === 0) {
+                        d += `M ${x} ${y}`;
+                    } else {
+                        d += ` L ${x} ${y}`;
+                    }
+                }
+                
+                path.setAttribute('d', d);
+                path.setAttribute('fill', 'none');
+                path.setAttribute('stroke', 'black');
+                g.appendChild(path);
+            }
+            
+            
+            canvas.appendChild(g);
+        }
+
+        function generateSingleSpiral(canvas, width, height, params, rng) {
+            const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            
+            const diagonal = Math.sqrt(width * width + height * height);
+            const maxRadius = diagonal; // Use full diagonal to ensure coverage when rotated
+            
+            // Calculate points based on density
+            const rotations = params.density / 2;
+            const pointsPerRotation = 100;
+            const points = Math.floor(rotations * pointsPerRotation);
+            
+            // Generate multiple spirals
+            for (let obj = 0; obj < params.numObjects; obj++) {
+                let cx, cy;
+                
+                if (params.numObjects === 1) {
+                    // Single object uses the center point controls
+                    cx = width * (params.centerX / 100);
+                    cy = height * (params.centerY / 100);
+                } else {
+                    // Multiple objects distributed in a grid pattern
+                    const cols = Math.ceil(Math.sqrt(params.numObjects));
+                    const rows = Math.ceil(params.numObjects / cols);
+                    const col = obj % cols;
+                    const row = Math.floor(obj / cols);
+                    
+                    cx = (width / (cols + 1)) * (col + 1);
+                    cy = (height / (rows + 1)) * (row + 1);
+                    
+                    // Add some randomness to position if randomness is enabled
+                    if (params.randomness > 0) {
+                        cx += (rng.next() - 0.5) * (width / cols) * (params.randomness / 100);
+                        cy += (rng.next() - 0.5) * (height / rows) * (params.randomness / 100);
+                    }
+                }
+                
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                let d = '';
+                
+                for (let i = 0; i <= points; i++) {
+                    const t = i / points;
+                    
+                    const angle = t * rotations * Math.PI * 2;
+                    let radius = t * maxRadius;
+                    
+                    if (params.randomness > 0) {
+                        radius += (rng.next() - 0.5) * 30 * (params.randomness / 100);
+                    }
+                    
+                    const x = cx + Math.cos(angle) * radius;
+                    const y = cy + Math.sin(angle) * radius;
+                    
+                    if (i === 0) {
+                        d += `M ${x} ${y}`;
+                    } else {
+                        d += ` L ${x} ${y}`;
+                    }
+                }
+                
+                path.setAttribute('d', d);
+                path.setAttribute('fill', 'none');
+                path.setAttribute('stroke', 'black');
+                g.appendChild(path);
+            }
+            
+            
+            canvas.appendChild(g);
+        }
+
+        function generateWave(canvas, width, height, params, rng) {
+            const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            const rows = params.density;
+            const cols = params.density * 2;
+            const spacingY = height / rows;
+            const spacingX = width / cols;
+            
+            const diagonal = Math.sqrt(width * width + height * height);
+            const cx = width / 2;
+            const cy = height / 2;
+            
+            const iMin = Math.floor((cy - diagonal) / spacingY) - 1;
+            const iMax = Math.ceil((cy + diagonal) / spacingY) + 1;
+            const jMin = Math.floor((cx - diagonal) / spacingX) - 1;
+            const jMax = Math.ceil((cx + diagonal) / spacingX) + 1;
+            
+            for (let i = iMin; i <= iMax; i++) {
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                let d = '';
+                
+                for (let j = jMin; j <= jMax; j++) {
+                    const x = j * spacingX;
+                    let y = i * spacingY + Math.sin((j / cols) * Math.PI * 2 * (params.density / 10)) * spacingY * 0.4;
+                    
+                    if (params.randomness > 0) {
+                        y += (rng.next() - 0.5) * 10 * (params.randomness / 100);
+                    }
+                    
+                    if (j === jMin) {
+                        d += `M ${x} ${y}`;
+                    } else {
+                        d += ` L ${x} ${y}`;
+                    }
+                }
+                
+                path.setAttribute('d', d);
+                path.setAttribute('fill', 'none');
+                path.setAttribute('stroke', 'black');
+                g.appendChild(path);
+            }
+            
+            
+            canvas.appendChild(g);
+        }
+
+        function generateTruchet(canvas, width, height, params, rng) {
+            const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            const tileSizeX = width / params.density;
+            const tileSizeY = height / params.density;
+            
+            const diagonal = Math.sqrt(width * width + height * height);
+            const cx = width / 2;
+            const cy = height / 2;
+            
+            const iMin = Math.floor((cy - diagonal) / tileSizeY) - 1;
+            const iMax = Math.ceil((cy + diagonal) / tileSizeY) + 1;
+            const jMin = Math.floor((cx - diagonal) / tileSizeX) - 1;
+            const jMax = Math.ceil((cx + diagonal) / tileSizeX) + 1;
+            
+            for (let j = iMin; j <= iMax; j++) {
+                for (let i = jMin; i <= jMax; i++) {
+                    const x = i * tileSizeX;
+                    const y = j * tileSizeY;
+                    const type = rng.next() > 0.5 ? 0 : 1;
+                    
+                    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    
+                    if (type === 0) {
+                        path.setAttribute('d', `M ${x} ${y} Q ${x + tileSizeX} ${y} ${x + tileSizeX} ${y + tileSizeY}`);
+                    } else {
+                        path.setAttribute('d', `M ${x + tileSizeX} ${y} Q ${x} ${y} ${x} ${y + tileSizeY}`);
+                    }
+                    
+                    path.setAttribute('fill', 'none');
+                    path.setAttribute('stroke', 'black');
+                    g.appendChild(path);
+                }
+            }
+            
+            
+            canvas.appendChild(g);
+        }
+
+        function generateNoise(canvas, width, height, params, rng) {
+            const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            const lines = params.density * 2;
+            const spacingY = height / lines;
+            const points = 100;
+            const spacingX = width / points;
+            
+            const diagonal = Math.sqrt(width * width + height * height);
+            const cx = width / 2;
+            const cy = height / 2;
+            
+            const iMin = Math.floor((cy - diagonal) / spacingY) - 1;
+            const iMax = Math.ceil((cy + diagonal) / spacingY) + 1;
+            const jMin = Math.floor((cx - diagonal) / spacingX) - 1;
+            const jMax = Math.ceil((cx + diagonal) / spacingX) + 1;
+            
+            for (let i = iMin; i <= iMax; i++) {
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                let d = '';
+                
+                for (let j = jMin; j <= jMax; j++) {
+                    const x = j * spacingX;
+                    const baseY = i * spacingY;
+                    const noiseY = (rng.next() - 0.5) * spacingY * 0.8 * (params.randomness / 100 + 0.1);
+                    const y = baseY + noiseY;
+                    
+                    if (j === jMin) {
+                        d += `M ${x} ${y}`;
+                    } else {
+                        d += ` L ${x} ${y}`;
+                    }
+                }
+                
+                path.setAttribute('d', d);
+                path.setAttribute('fill', 'none');
+                path.setAttribute('stroke', 'black');
+                g.appendChild(path);
+            }
+            
+            
+            canvas.appendChild(g);
+        }
+
+        function randomize() {
+            const patternTypes = ['grid', 'radial', 'spiral', 'singlespiral', 'wave', 'truchet', 'noise'];
+            const randomPattern = patternTypes[Math.floor(Math.random() * patternTypes.length)];
+            
+            document.getElementById('patternType').value = randomPattern;
+            document.getElementById('seed').value = Math.floor(Math.random() * 1000000);
+            document.getElementById('density').value = Math.floor(Math.random() * 60) + 10;
+            document.getElementById('numObjects').value = Math.floor(Math.random() * 10) + 1;
+            document.getElementById('scale').value = Math.floor(Math.random() * 40) + 5;
+            document.getElementById('rotation').value = Math.floor(Math.random() * 360);
+            document.getElementById('centerX').value = Math.floor(Math.random() * 80) + 10;
+            document.getElementById('centerY').value = Math.floor(Math.random() * 80) + 10;
+            document.getElementById('randomness').value = Math.floor(Math.random() * 100);
+            generate();
+        }
+
+        function saveToFile() {
+            const canvas = document.getElementById('canvas');
+            const svgClone = canvas.cloneNode(true);
+            
+            // Get clip bounds
+            const defs = svgClone.querySelector('defs');
+            const clipRect = defs ? defs.querySelector('clipPath rect') : null;
+            
+            if (!clipRect) {
+                console.warn('No clip rect found');
+                exportSVG(svgClone);
+                return;
+            }
+            
+            const clipX = parseFloat(clipRect.getAttribute('x'));
+            const clipY = parseFloat(clipRect.getAttribute('y'));
+            const clipW = parseFloat(clipRect.getAttribute('width'));
+            const clipH = parseFloat(clipRect.getAttribute('height'));
+            const clipRight = clipX + clipW;
+            const clipBottom = clipY + clipH;
+            
+            console.log(`Clip bounds: [${clipX}, ${clipY}] to [${clipRight}, ${clipBottom}]`);
+            
+            // Cohen-Sutherland line clipping
+            function clipLine(x0, y0, x1, y1) {
+                const INSIDE = 0, LEFT = 1, RIGHT = 2, BOTTOM = 4, TOP = 8;
+                function outcode(x, y) {
+                    let code = INSIDE;
+                    if (x < clipX) code |= LEFT;
+                    else if (x > clipRight) code |= RIGHT;
+                    if (y < clipY) code |= TOP;
+                    else if (y > clipBottom) code |= BOTTOM;
+                    return code;
+                }
+                
+                let out0 = outcode(x0, y0);
+                let out1 = outcode(x1, y1);
+                
+                while (true) {
+                    if (!(out0 | out1)) return { x0, y0, x1, y1 };
+                    if (out0 & out1) return null;
+                    
+                    const out = out0 || out1;
+                    let x, y;
+                    
+                    if (out & TOP) {
+                        x = x0 + (x1 - x0) * (clipY - y0) / (y1 - y0);
+                        y = clipY;
+                    } else if (out & BOTTOM) {
+                        x = x0 + (x1 - x0) * (clipBottom - y0) / (y1 - y0);
+                        y = clipBottom;
+                    } else if (out & RIGHT) {
+                        y = y0 + (y1 - y0) * (clipRight - x0) / (x1 - x0);
+                        x = clipRight;
+                    } else {
+                        y = y0 + (y1 - y0) * (clipX - x0) / (x1 - x0);
+                        x = clipX;
+                    }
+                    
+                    if (out === out0) {
+                        x0 = x; y0 = y;
+                        out0 = outcode(x0, y0);
+                    } else {
+                        x1 = x; y1 = y;
+                        out1 = outcode(x1, y1);
+                    }
+                }
+            }
+            
+            // Clip a quadratic bezier curve - returns array of line segments
+            function clipQuadBezier(x0, y0, cx, cy, x1, y1, steps = 20) {
+                const segments = [];
+                let lastX = x0, lastY = y0;
+                
+                for (let i = 1; i <= steps; i++) {
+                    const t = i / steps;
+                    const t1 = 1 - t;
+                    const px = t1*t1 * x0 + 2*t1*t * cx + t*t * x1;
+                    const py = t1*t1 * y0 + 2*t1*t * cy + t*t * y1;
+                    
+                    const clipped = clipLine(lastX, lastY, px, py);
+                    if (clipped) {
+                        segments.push(clipped);
+                    }
+                    
+                    lastX = px;
+                    lastY = py;
+                }
+                
+                return segments;
+            }
+            
+            // Process layers
+            const layers = svgClone.querySelectorAll('g[id^="layer"]');
+            let totalPaths = 0;
+            let totalKept = 0;
+            
+            layers.forEach(layer => {
+                const innerG = layer.querySelector('g[transform]');
+                if (!innerG) return;
+                
+                const originalLayer = canvas.querySelector(`g[id="${layer.id}"]`);
+                const originalInnerG = originalLayer ? originalLayer.querySelector('g[transform]') : null;
+                
+                if (!originalInnerG) return;
+                
+                const matrix = originalInnerG.getCTM();
+                const paths = Array.from(innerG.querySelectorAll('path'));
+                totalPaths += paths.length;
+                
+                paths.forEach(path => {
+                    const d = path.getAttribute('d');
+                    if (!d) return;
+                    
+                    // Parse all commands
+                    const tokens = d.match(/[MLQZ]|[\d.\-]+/g) || [];
+                    let newD = '';
+                    let currentX = 0, currentY = 0;
+                    let needMove = true;
+                    let i = 0;
+                    
+                    while (i < tokens.length) {
+                        const cmd = tokens[i++];
+                        
+                        if (cmd === 'M') {
+                            const x = parseFloat(tokens[i++]);
+                            const y = parseFloat(tokens[i++]);
+                            const tx = matrix.a * x + matrix.c * y + matrix.e;
+                            const ty = matrix.b * x + matrix.d * y + matrix.f;
+                            currentX = tx;
+                            currentY = ty;
+                            needMove = true;
+                            
+                        } else if (cmd === 'L') {
+                            const x = parseFloat(tokens[i++]);
+                            const y = parseFloat(tokens[i++]);
+                            const tx = matrix.a * x + matrix.c * y + matrix.e;
+                            const ty = matrix.b * x + matrix.d * y + matrix.f;
+                            
+                            const clipped = clipLine(currentX, currentY, tx, ty);
+                            if (clipped) {
+                                if (needMove) {
+                                    newD += `M ${clipped.x0.toFixed(2)} ${clipped.y0.toFixed(2)} `;
+                                    needMove = false;
+                                }
+                                newD += `L ${clipped.x1.toFixed(2)} ${clipped.y1.toFixed(2)} `;
+                                currentX = clipped.x1;
+                                currentY = clipped.y1;
+                            } else {
+                                needMove = true;
+                            }
+                            currentX = tx;
+                            currentY = ty;
+                            
+                        } else if (cmd === 'Q') {
+                            const cx = parseFloat(tokens[i++]);
+                            const cy = parseFloat(tokens[i++]);
+                            const x = parseFloat(tokens[i++]);
+                            const y = parseFloat(tokens[i++]);
+                            
+                            const tcx = matrix.a * cx + matrix.c * cy + matrix.e;
+                            const tcy = matrix.b * cx + matrix.d * cy + matrix.f;
+                            const tx = matrix.a * x + matrix.c * y + matrix.e;
+                            const ty = matrix.b * x + matrix.d * y + matrix.f;
+                            
+                            const segments = clipQuadBezier(currentX, currentY, tcx, tcy, tx, ty);
+                            
+                            for (const seg of segments) {
+                                if (needMove) {
+                                    newD += `M ${seg.x0.toFixed(2)} ${seg.y0.toFixed(2)} `;
+                                    needMove = false;
+                                }
+                                newD += `L ${seg.x1.toFixed(2)} ${seg.y1.toFixed(2)} `;
+                                currentX = seg.x1;
+                                currentY = seg.y1;
+                            }
+                            
+                            if (segments.length === 0) {
+                                needMove = true;
+                            }
+                            
+                            currentX = tx;
+                            currentY = ty;
+                            
+                        } else if (cmd === 'Z') {
+                            // Close path - ignore for now
+                        }
+                    }
+                    
+                    if (newD.trim().length > 0) {
+                        path.setAttribute('d', newD.trim());
+                        totalKept++;
+                    } else {
+                        path.remove();
+                    }
+                });
+                
+                innerG.removeAttribute('transform');
+                layer.removeAttribute('clip-path');
+            });
+            
+            console.log(`Processed ${totalPaths} paths, kept ${totalKept}`);
+            
+            if (defs) {
+                defs.querySelectorAll('clipPath').forEach(cp => cp.remove());
+            }
+            
+            exportSVG(svgClone);
+        }
+        
+        function exportSVG(svgClone) {
+            svgClone.setAttribute('width', '210mm');
+            svgClone.setAttribute('height', '297mm');
+            svgClone.setAttribute('viewBox', '0 0 794 1123');
+            svgClone.setAttribute('xmlns:inkscape', 'http://www.inkscape.org/namespaces/inkscape');
+            
+            const svgData = new XMLSerializer().serializeToString(svgClone);
+            const blob = new Blob([svgData], { type: 'image/svg+xml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const titleInput = document.getElementById('titleInput').value.trim();
+            const filename = titleInput
+                ? titleInput.replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '-')
+                : 'pattern-' + Date.now();
+            a.download = `${filename}.svg`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showStatus('SVG exported');
+        }
+        function loadFromFile() {
+
+            document.getElementById('fileInput').click();
+        }
+
+        function handleFileLoad(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const parser = new DOMParser();
+                const svgDoc = parser.parseFromString(event.target.result, 'image/svg+xml');
+                const svgElement = svgDoc.documentElement;
+                
+                const canvas = document.getElementById('canvas');
+                canvas.innerHTML = svgElement.innerHTML;
+                
+                showStatus('SVG loaded from file');
+            };
+            reader.readAsText(file);
+        }
+
+        async function saveToStorage() {
+            const params = getParams();
+            const timestamp = Date.now();
+            const key = `pattern-${timestamp}`;
+            
+            const data = {
+                params: params,
+                timestamp: timestamp,
+                svg: new XMLSerializer().serializeToString(document.getElementById('canvas'))
+            };
+            
+            await patternStore.set(key, JSON.stringify(data));
+            loadSavedPatterns();
+            const persistMsg = patternStore._backend === 'api'        ? ' (saved to server)' :
+                               patternStore._backend === 'persistent' ? '' :
+                               patternStore._backend === 'session'    ? ' (session only — lost on reload)' :
+                                                                        ' (memory only — lost on reload)';
+            showStatus('Saved' + persistMsg);
+        }
+
+        function loadSavedPatterns() {
+            const container = document.getElementById('savedPatternsList');
+            container.innerHTML = '';
+            
+            const keys = patternStore.keys().sort().reverse();
+            
+            if (keys.length === 0) {
+                container.innerHTML = '<div style="font-size: 11px; color: #999999;">No saved patterns</div>';
+                return;
+            }
+            
+            keys.forEach(key => {
+                const data = JSON.parse(patternStore.get(key));
+                const date = new Date(data.timestamp);
+                
+                const typeLabels = { grid: 'Grid', radial: 'Radial', spiral: 'Spiral', singlespiral: 'Single Spiral', wave: 'Wave', truchet: 'Truchet Tiles', noise: 'Noise Lines' };
+                const label = data.params.title || typeLabels[data.params.type] || data.params.type;
+                const item = document.createElement('div');
+                item.className = 'pattern-item';
+                item.innerHTML = `
+                    <span>${label} — ${date.toLocaleDateString()} ${date.toLocaleTimeString()}</span>
+                    <button onclick="deletePattern('${key}')">Delete</button>
+                `;
+                item.onclick = (e) => {
+                    if (e.target.tagName !== 'BUTTON') {
+                        loadPattern(key);
+                    }
+                };
+                container.appendChild(item);
+            });
+        }
+
+        function loadPattern(key) {
+            const data = JSON.parse(patternStore.get(key));
+            const params = data.params;
+            
+            document.getElementById('patternType').value = params.type;
+            document.getElementById('density').value = params.density;
+            document.getElementById('numObjects').value = params.numObjects || 1;
+            document.getElementById('scale').value = params.scale;
+            document.getElementById('rotation').value = params.rotation;
+            document.getElementById('centerX').value = params.centerX || 50;
+            document.getElementById('centerY').value = params.centerY || 50;
+            document.getElementById('randomness').value = params.randomness;
+            document.getElementById('seed').value = params.seed;
+            document.getElementById('layers').value = params.layers || 1;
+            document.getElementById('titleInput').value = params.title || '';
+            
+            generate();
+            showStatus('Pattern loaded');
+        }
+
+        async function deletePattern(key) {
+            if (confirm('Delete this pattern?')) {
+                await patternStore.remove(key);
+                loadSavedPatterns();
+                showStatus('Pattern deleted');
+            }
+        }
+
+        async function clearStorage() {
+            if (confirm('Clear all saved patterns?')) {
+                await patternStore.clear();
+                loadSavedPatterns();
+                showStatus('All patterns cleared');
+            }
+        }
+
+        function showStatus(message) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            setTimeout(() => {
+                status.textContent = '';
+            }, 2000);
+        }
+
+        function zoomIn() {
+            if (zoomLevel < maxZoom) {
+                zoomLevel = Math.min(zoomLevel + zoomStep, maxZoom);
+                applyZoom();
+            }
+        }
+
+        function zoomOut() {
+            if (zoomLevel > minZoom) {
+                zoomLevel = Math.max(zoomLevel - zoomStep, minZoom);
+                applyZoom();
+            }
+        }
+
+        function resetZoom() {
+            zoomLevel = 1;
+            applyZoom();
+        }
+
+        function applyZoom() {
+            const canvas = document.getElementById('canvas');
+            canvas.style.transform = `scale(${zoomLevel})`;
+            document.getElementById('zoomLevel').textContent = Math.round(zoomLevel * 100) + '%';
+        }
+
+        // Mouse wheel zoom
+        document.addEventListener('DOMContentLoaded', () => {
+            const container = document.querySelector('.canvas-container');
+            
+            // Zoom with mouse wheel (no modifier key needed)
+            container.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const delta = e.deltaY > 0 ? -zoomStep : zoomStep;
+                zoomLevel = Math.max(minZoom, Math.min(maxZoom, zoomLevel + delta));
+                applyZoom();
+            });
+            
+            // Click and drag to pan
+            container.addEventListener('mousedown', (e) => {
+                // Don't pan if clicking on zoom controls
+                if (e.target.closest('.zoom-controls')) return;
+                
+                isPanning = true;
+                container.classList.add('dragging');
+                startX = e.pageX - container.offsetLeft;
+                startY = e.pageY - container.offsetTop;
+                scrollLeft = container.scrollLeft;
+                scrollTop = container.scrollTop;
+            });
+            
+            container.addEventListener('mouseleave', () => {
+                isPanning = false;
+                container.classList.remove('dragging');
+            });
+            
+            container.addEventListener('mouseup', () => {
+                isPanning = false;
+                container.classList.remove('dragging');
+            });
+            
+            container.addEventListener('mousemove', (e) => {
+                if (!isPanning) return;
+                e.preventDefault();
+                const x = e.pageX - container.offsetLeft;
+                const y = e.pageY - container.offsetTop;
+                const walkX = (x - startX) * 1.5; // Scroll speed multiplier
+                const walkY = (y - startY) * 1.5;
+                container.scrollLeft = scrollLeft - walkX;
+                container.scrollTop = scrollTop - walkY;
+            });
+        });
+    </script>
+</body>
+</html>
